@@ -3,3 +3,90 @@ title: "PR5 DEPLOYMENT"
 output: html_notebook
 ---
 
+# Deployment: Model-agnostic methods
+
+```{r}
+library(randomForest)
+library(dplyr)
+library(mltools)
+library(data.table)
+library(pdp)
+library(plotly)
+```
+
+```{r}
+horas <- read.csv('hour.csv')
+datos <- read.csv('day.csv')
+kc_house <- read.csv('kc_house_data.csv')
+```
+
+### **1.- One dimensional Partial Dependence Plot.**
+
+The partial dependence plot shows the marginal effect of a feature on the predicted outcome of a previously fit model.
+
+Apply PDP to the regression example of predicting bike rentals. Fit a random forest approximation for the prediction of bike rentals (**cnt**). Use the partial dependence plot to visualize the relationships the model learned. Use the slides shown in class as model.
+
+```{r}
+#Siguiendo los pasos de la práctica 3, extraemos lo necesario para el análisis
+paso1 <- datos %>% select(workingday,holiday)
+datos$season <- as.factor(datos$season)
+
+paso2 <- one_hot(as.data.table(datos$season))
+paso2 <- paso2[,-4]
+names(paso2) = c('springer','summer','fall')
+
+misty <- datos %>% mutate(misty = case_when(weathersit == 2~ 1,
+                                            weathersit != 2 ~ 0))
+
+misty <- misty$misty
+
+rain <- datos %>% mutate(rain = case_when(weathersit == 3| weathersit == 4~ 1,
+                                            TRUE ~ 0))
+
+rain <- rain$rain
+
+paso5 <- datos %>% mutate(de_temp = temp*41, de_hum = hum*100, de_windspeed = windspeed*67)
+paso5 <- paso5[,c(17,18,19)]
+
+days_since_2011 <- as.numeric(difftime(as.Date(datos$dteday, format = '%Y-%m-%d'),as.Date('2011-01-01',format = '%Y-%m-%d'), units = "days"))
+
+cnt <- datos$cnt
+
+df <- cbind(paso1,paso2, misty,rain,paso5,days_since_2011,cnt)
+```
+
+```{r}
+model_rf <- randomForest(cnt~.,data=df)
+
+pdp_days_since <- pdp::partial(model_rf, pred.var = 'days_since_2011', plot = F)
+pdp_temp <- pdp::partial(model_rf, pred.var = 'de_temp', plot = F)
+pdp_hum <- pdp::partial(model_rf, pred.var = 'de_hum', plot = F)
+pdp_wind <- pdp::partial(model_rf, pred.var = 'de_windspeed', plot = F)
+```
+
+```{r}
+p1 <- ggplot(pdp_days_since, aes(x = days_since_2011, y = yhat)) +
+  geom_line() +
+  xlab("Days since 2011") + ylab('Partial Dependence')
+
+p2 <- ggplot(pdp_temp, aes(x = de_temp, y = yhat)) +
+  geom_line() +
+  xlab("Temperature")
+
+p3 <- ggplot(pdp_hum, aes(x = de_hum, y = yhat)) +
+  geom_line() +
+  xlab("Humidity")
+
+p4 <- ggplot(pdp_wind, aes(x = de_windspeed, y = yhat)) +
+  geom_line() +
+  xlab("Windspeed")
+
+subplot(p1,p2,p3,p4, shareY = T) %>%  
+  layout(annotations = list( 
+    list(x = 0.01 , y = 1.07, text = "Days since 2011", showarrow = F, xref='paper', yref='paper'), 
+    list(x = 0.3 , y = 1.07, text = "Temperature", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.63 , y = 1.07, text = "Humidity", showarrow = F, xref='paper', yref='paper'),
+    list(x = 0.95 , y = 1.07, text = "Windspeed", showarrow = F, xref='paper', yref='paper')))
+```
+
+Analyse the influence of **days since 2011**, **temperature**, **humidity** and **wind speed** on the predicted bike counts.
