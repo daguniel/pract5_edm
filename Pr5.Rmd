@@ -79,7 +79,7 @@ library(tictoc)
 
 
 #Seleccionamos un número de filas aleatorias
-sampled <- sample_n(df, 40) 
+sampled <- sample_n(datmod, 40) 
 
 #Filas del atributo 'temp' que tienen una equivalencia en el atributo 'hum'
 temphum <- inner_join(data.frame(sampled$temp), data.frame(sampled$hum), by=character()) 
@@ -95,4 +95,17 @@ temphum[["prob"]][i] <- sum(pred) / nrow(datmod)
 }
 
 ggplot(temphum, aes(x=temperature, y=humidity)) + geom_tile(aes(fill=prob, width=10, height=10)) + labs(x="Temperature", y="Humidity") + guides(fill=guide_legend(title="Number of bikes")) + geom_rug()
+
 ```
+**QUESTION:**.
+
+For the analysis of the two-dimensional PDP we must consider in unison the density graphs of each of the attributes (represented on their respective axes) with the legend which, by the intensity of the colour, indicates the estimated value of the number of bicycles rented. Thus, this legend shows that the areas with a lighter blue colour indicate a higher value of the predicted response variable, and alternatively the darker tones correspond to lower estimated values for the number of bicycles.
+
+We focus our explanation on the ranges of values of our attributes for which we can draw general interpretations with respect to the predictive model. In our case for temperature (from 4ºC to 28ºC) and for humidity (from 44% to 81%) we observe nine clearly differentiated zones in terms of tone.
+
+In the first zone (Temperature: 4-8ºC, Humidity: 75-81%) we observe that it is where the number of rented bicycles is the lowest (between 3000 and 3500 units) just where low temperature and high humidity conditions meet.
+
+In the last zone (temperature: 17-28ºC, humidity: 44-61%) delimited by high temperature and low humidity conditions, the highest number of rented bicycles is predicted (approximately 5000 units).
+
+Both boundary situations correspond to the direct relationship between our response variable with the variable 'temp' as well as the inverse relationship with the variable 'hum'.
+
