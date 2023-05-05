@@ -27,68 +27,72 @@ The partial dependence plot shows the marginal effect of a feature on the predic
 Apply PDP to the regression example of predicting bike rentals. Fit a random forest approximation for the prediction of bike rentals (**cnt**). Use the partial dependence plot to visualize the relationships the model learned. Use the slides shown in class as model.
 
 ```{r}
-#Siguiendo los pasos de la práctica 3, extraemos lo necesario para el análisis
-paso1 <- datos %>% select(workingday,holiday)
-datos$season <- as.factor(datos$season)
+#Cargamos los datos 
+days$dteday <- as_date(days$dteday) # pasamos de caracter a fecha 
 
-paso2 <- one_hot(as.data.table(datos$season))
-paso2 <- paso2[,-4]
-names(paso2) = c('springer','summer','fall')
 
-misty <- datos %>% mutate(misty = case_when(weathersit == 2~ 1,
-                                            weathersit != 2 ~ 0))
+#Selección de variables para el modelo:
+datmod <- select(days, workingday, holiday, temp, hum, windspeed, cnt)
+datmod$days_since_2011 <- int_length(interval(ymd("2011-01-01"), days$dteday)) / (3600*24)
 
-misty <- misty$misty
+#Creamos las nuevas variables para el modelo:
+datmod$winter <- ifelse(days$season==1, 1, 0)
+datmod$summer <- ifelse(days$season==3, 1, 0)
+datmod$fall <- ifelse(days$season==4, 1, 0)
+datmod$MISTY <- ifelse(days$weathersit == 2, 1, 0)
+datmod$RAIN <- ifelse(days$weathersit == 3 | days$weathersit == 4, 1, 0)
 
-rain <- datos %>% mutate(rain = case_when(weathersit == 3| weathersit == 4~ 1,
-                                            TRUE ~ 0))
+#Al normalizar las variables se hace dificil interpretar el modelo, ya que los valores normalizados no tienen una interpretacion intuitiva. Al desnormalizar las variables nos permite interpretar los coeficientes del modelo individualmente de un modo mas sencillo. Pero, perdemos la capacidad de comparar las varibales, ya que cada uno tiene su propio rango de valores y escalas originales.
+#t_norm * (t_max-t_min) + t_min = t
+datmod$temp <- days$temp * (39-(-8)) - 8
+#hum_nor = hum/100
+datmod$hum <- days$hum * 100
+#wind_nor = wind/67
+datmod$windspeed <- days$windspeed * 67
 
-rain <- rain$rain
+library(pdp)
+library(vip)
 
-paso5 <- datos %>% mutate(de_temp = temp*41, de_hum = hum*100, de_windspeed = windspeed*67)
-paso5 <- paso5[,c(17,18,19)]
+#Entrenamos el modelo
+days_rf <- randomForest(cnt ~ ., data = datmod, importance = TRUE)
 
-days_since_2011 <- as.numeric(difftime(as.Date(datos$dteday, format = '%Y-%m-%d'),as.Date('2011-01-01',format = '%Y-%m-%d'), units = "days"))
+p1 <- partial(days_rf, pred.var = "days_since_2011", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
+p2 <- partial(days_rf, pred.var = "temp", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
+p3 <- partial(days_rf, pred.var = "hum", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
+p4 <- partial(days_rf, pred.var = "windspeed", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
 
-cnt <- datos$cnt
-
-df <- cbind(paso1,paso2, misty,rain,paso5,days_since_2011,cnt)
-```
-
-```{r}
-model_rf <- randomForest(cnt~.,data=df)
-
-pdp_days_since <- pdp::partial(model_rf, pred.var = 'days_since_2011', plot = F)
-pdp_temp <- pdp::partial(model_rf, pred.var = 'de_temp', plot = F)
-pdp_hum <- pdp::partial(model_rf, pred.var = 'de_hum', plot = F)
-pdp_wind <- pdp::partial(model_rf, pred.var = 'de_windspeed', plot = F)
-```
-
-```{r}
-p1 <- ggplot(pdp_days_since, aes(x = days_since_2011, y = yhat)) +
-  geom_line() +
-  xlab("Days since 2011") + ylab('Partial Dependence')
-
-p2 <- ggplot(pdp_temp, aes(x = de_temp, y = yhat)) +
-  geom_line() +
-  xlab("Temperature")
-
-p3 <- ggplot(pdp_hum, aes(x = de_hum, y = yhat)) +
-  geom_line() +
-  xlab("Humidity")
-
-p4 <- ggplot(pdp_wind, aes(x = de_windspeed, y = yhat)) +
-  geom_line() +
-  xlab("Windspeed")
-
-subplot(p1,p2,p3,p4, shareY = T) %>%  
-  layout(annotations = list( 
-    list(x = 0.01 , y = 1.07, text = "Days since 2011", showarrow = F, xref='paper', yref='paper'), 
-    list(x = 0.3 , y = 1.07, text = "Temperature", showarrow = F, xref='paper', yref='paper'),
-    list(x = 0.63 , y = 1.07, text = "Humidity", showarrow = F, xref='paper', yref='paper'),
-    list(x = 0.95 , y = 1.07, text = "Windspeed", showarrow = F, xref='paper', yref='paper')))
+subplot(p1,p2,p3,p4, shareX = F, titleX = TRUE)
 ```
 
 Analyse the influence of **days since 2011**, **temperature**, **humidity** and **wind speed** on the predicted bike counts.
 
-A medida que avanza el tiempo, el modelo predice que aumenta el número de bicicletas alquiladas, esto es normal, ya que el servicio se da más a conocer a lo largo del tiempo. For warm but not too hot climates, a large number of rented bikes is predicted. Yet, from temperatures over 27 ºC, the number of rented bikes decrease(too much heat). It appears that cyclists are increasingly inhibited from renting a bike when humidity exceeds 60%. Finally, the windier it gets, the less people like to ride a bike. which is logic. It appears that the model predicts the same from 25 km/h, maybe because there is little training data in that range.
+As time goes on, the model predicts an increase in the number of rented bicycles, which is normal as the service becomes more well-known over time. For warm but not too hot climates, a large number of rented bikes is predicted. Yet, from temperatures over 27 ºC, the number of rented bikes decrease(too much heat). It appears that cyclists are increasingly inhibited from renting a bike when humidity exceeds 60%. Finally, the windier it gets, the less people like to ride a bike. which is logic. It appears that the model predicts the same from 25 km/h, maybe because there is little training data in that range.
+
+### 2.- Bidimensional Partial Dependency Plot.
+
+Generate a 2D Partial Dependency Plot with humidity and temperature to predict the number of bikes rented depending on those parameters.
+
+Show the density distribution of both input features with the 2D plot as shown in the class slides.
+
+```{r}
+library(tictoc)
+
+
+#Seleccionamos un número de filas aleatorias
+sampled <- sample_n(df, 40) 
+
+#Filas del atributo 'temp' que tienen una equivalencia en el atributo 'hum'
+temphum <- inner_join(data.frame(sampled$temp), data.frame(sampled$hum), by=character()) 
+colnames(temphum) <- c("temperature","humidity")
+
+temphum$prob <- 0 
+for(i in 1:nrow(temphum)){
+r <- datmod
+r[["temp"]] <- temphum[["temperature"]][i]
+r[["hum"]] <- temphum[["humidity"]][i]
+pred <- predict(days_rf, r) 
+temphum[["prob"]][i] <- sum(pred) / nrow(datmod) 
+}
+
+ggplot(temphum, aes(x=temperature, y=humidity)) + geom_tile(aes(fill=prob, width=10, height=10)) + labs(x="Temperature", y="Humidity") + guides(fill=guide_legend(title="Number of bikes")) + geom_rug()
+```
