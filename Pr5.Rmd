@@ -17,7 +17,7 @@ library(plotly)
 ```{r}
 horas <- read.csv('hour.csv')
 datos <- read.csv('day.csv')
-kc_house <- read.csv('kc_house_data.csv')
+house <- read.csv('kc_house_data.csv')
 ```
 
 ### **1.- One dimensional Partial Dependence Plot.**
@@ -97,7 +97,8 @@ temphum[["prob"]][i] <- sum(pred) / nrow(datmod)
 ggplot(temphum, aes(x=temperature, y=humidity)) + geom_tile(aes(fill=prob, width=10, height=10)) + labs(x="Temperature", y="Humidity") + guides(fill=guide_legend(title="Number of bikes")) + geom_rug()
 
 ```
-**QUESTION:**.
+
+**QUESTION:**
 
 For the analysis of the two-dimensional PDP we must consider in unison the density graphs of each of the attributes (represented on their respective axes) with the legend which, by the intensity of the colour, indicates the estimated value of the number of bicycles rented. Thus, this legend shows that the areas with a lighter blue colour indicate a higher value of the predicted response variable, and alternatively the darker tones correspond to lower estimated values for the number of bicycles.
 
@@ -109,3 +110,37 @@ In the last zone (temperature: 17-28ºC, humidity: 44-61%) delimited by high tem
 
 Both boundary situations correspond to the direct relationship between our response variable with the variable 'temp' as well as the inverse relationship with the variable 'hum'.
 
+### **3.- PDP to explain the price of a house.**
+
+Apply the previous concepts to predict the **price** of a house from the database **kc_house_data.csv**. In this case, use again a random forest approximation for the prediction based on the features **bedrooms**, **bathrooms**, **sqft_living**, **sqft_lot**, **floors** and **yr_built**.
+
+Use the partial dependence plot to visualize the relationships the model learned.
+
+```{r}
+#Selección de filas aleatorias
+sample_house <- sample_frac(house, 0.2)
+sample_house <- select(sample_house, bedrooms, bathrooms, sqft_living, sqft_lot, floors, yr_built, price)
+
+#Entrenamos el modelo
+house_rf <- randomForest(price ~ ., data = sample_house, importance = TRUE)
+
+p1 <- partial(house_rf, pred.var = "bedrooms", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
+p2 <- partial(house_rf, pred.var = "bathrooms", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
+p3 <- partial(house_rf, pred.var = "sqft_living", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
+p4 <- partial(house_rf, pred.var = "floors", plot = TRUE, rug = TRUE, plot.engine = "ggplot2")
+
+subplot(p1,p2,p3,p4, shareX = FALSE, titleX = TRUE)
+
+```
+
+**QUESTION:**
+
+***Analyse the influence of bedrooms, bathrooms, sqft_living and floors on the predicted price.***
+
+The general interpretation of the 'post hoc' PDP model for the attribute **'bedrooms'** with respect to the predicted model according to its density graph allows us to draw conclusions in the range of 1 to 4 bedrooms. We observe two different trends: an increasing trend, i.e. a rise in price from 1 to 2 bedrooms (from 572000 to 581000$); while a decrease in price from 2 to 4 bedrooms (from 581000 to 542000$). We can understand that the most requested number of rooms per house, and therefore the most expensive, are those with 2 rooms. In the range above these, as it is not a usual number of rooms, we interpret this as the reason why the predictive model justifies the trend described above.
+
+As for the variable **'bathrooms'** we can observe a positive correlation between it and the estimated price of the house, since normally a house with more bathrooms is considered a more luxurious house and therefore more expensive, it is worth noting the clear increase in price if we go from 3 to 4 bathrooms. We can only draw valid conclusions if we take into account those dwellings with 0 to 4 bathrooms, as we do not have enough data recorded for dwellings with a higher number of bathrooms.
+
+As for the variable **'sqft_living'**, the relationship is similar to the case of bathrooms, a larger dwelling will obviously be more expensive as it occupies more land. We have data up to about 5000 square metres, for those dwellings whose size exceeds this, we do not have enough data recorded and therefore cannot draw valid conclusions.
+
+For the last PDP graph, in relation to the analysis of the variable **'floors'** being the increasing trend we observe a notable difference in the price of the house when going from one floor to two, and above all, if there is a third floor in the house. Considering the small difference between one floor and two floors (from 540000 to 560000\$), taking into account the demographic characteristics mentioned above and considering the climatological characteristics of the area (short, hot and dry summers and cold and wet winters) the construction estimated by the two-floor model is usually the most demanded, placing the living areas and kitchen on one floor and the bedrooms on the upper floor. Of course, a third floor is already a big budget deviation and is considered to be an exceptional house.
